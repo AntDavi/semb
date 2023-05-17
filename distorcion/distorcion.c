@@ -5,6 +5,8 @@
 #define SIZE 1024
 #define TOLERANCE 0.01
 
+
+// Algoritmo de distorção
 float distortion(float x, float level) {
     float y = x * level;
     if (y > 1.0) {

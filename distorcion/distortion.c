@@ -42,7 +42,7 @@ void generate_table(float* input, float* output) {
     }
 }
 
-void apply_distortion(float* input, float* output) {
+void apply_distortion(float * input, float * output) {
     float frequency = 440.0;
     float amplitude = 0.8;
     float distortion_factor = 0.5;

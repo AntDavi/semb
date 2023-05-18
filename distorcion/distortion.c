@@ -2,95 +2,84 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define SIZE 1024
-#define TOLERANCE 0.01
+#define SAMPLE_RATE 44100
+#define BUFFER_SIZE 1024
 
-
-// Algoritmo de distorção
-float distortion(float x, float level) {
-    float y = x * level;
-    if (y > 1.0) {
-        y = 1.0;
-    } else if (y < -1.0) {
-        y = -1.0;
+void generate_plot(float* input, float* output) {
+    FILE *gnuplot = popen("gnuplot -persist", "w");
+    if (gnuplot == NULL) {
+        printf("Erro ao iniciar o gnuplot.\n");
+        return;
     }
-    return y;
+
+    // Gerando gráfico de comparação
+    fprintf(gnuplot, "set multiplot layout 2, 1\n");
+    fprintf(gnuplot, "set title 'Forma de Onda de Entrada'\n");
+    fprintf(gnuplot, "plot '-' with lines\n");
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        fprintf(gnuplot, "%f\n", input[i]);
+    }
+    fprintf(gnuplot, "e\n");
+
+    fprintf(gnuplot, "set title 'Forma de Onda de Saída'\n");
+    fprintf(gnuplot, "plot '-' with lines\n");
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        fprintf(gnuplot, "%f\n", output[i]);
+    }
+    fprintf(gnuplot, "e\n");
+
+    fflush(gnuplot);
+    pclose(gnuplot);
 }
 
-int compare(float *input, float *output, int size, float tolerance) {
-    int errors = 0;
-    int i;
-    for (i = 0; i < size; i++) {
-        float diff = fabs(input[i] - output[i]);
-        if (diff > tolerance) {
-            printf("Erro na posição %d: entrada=%f, saída=%f\n", i, input[i], output[i]);
-            errors++;
-        }
+void generate_table(float* input, float* output) {
+    printf("\nTabela de Comparação:\n");
+    printf("---------------------\n");
+    printf("  Amostra  |  Entrada  |   Saída   |\n");
+    printf("----------------------------------\n");
+    for (int i = 0; i < BUFFER_SIZE; i += 50) {
+        printf("   %4d    | %8.4f  | %8.4f |\n", i, input[i], output[i]);
     }
-    return errors;
 }
 
-void saveOutputToFile(float *output, int size, const char *filename) {
-    FILE *file = fopen(filename, "w");
-    if (file == NULL) {
-        printf("Erro ao abrir o arquivo.\n");
-        exit(1);
-    }
-    for (int i = 0; i < size; i++) {
-        fprintf(file, "%f\n", output[i]);
-    }
-    fclose(file);
-}
+void apply_distortion(float* input, float* output) {
+    float frequency = 440.0;
+    float amplitude = 0.8;
+    float distortion_factor = 0.5;
 
-void plotGraph() {
-    FILE *gnuplotPipe = popen("gnuplot -persistent", "w");
-    if (gnuplotPipe) {
-        fprintf(gnuplotPipe, "set title 'Onda de Entrada e Saída'\n");
-        fprintf(gnuplotPipe, "set xlabel 'Amostra'\n");
-        fprintf(gnuplotPipe, "set ylabel 'Amplitude'\n");
-        fprintf(gnuplotPipe, "plot 'input.txt' with lines title 'Entrada', 'output.txt' with lines title 'Saída'\n");
-        fflush(gnuplotPipe);
-        fprintf(gnuplotPipe, "exit\n");
-        pclose(gnuplotPipe);
-    } else {
-        printf("Erro ao abrir a tubulação do Gnuplot.\n");
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        float time = (float)i / SAMPLE_RATE;
+        float value = sin(2.0 * 3.1415 * frequency * time);
+
+        // Aplicando distorção
+        if (value >= distortion_factor)
+            output[i] = distortion_factor;
+        else if (value <= -distortion_factor)
+            output[i] = -distortion_factor;
+        else
+            output[i] = value;
+        
+        // Amplificando o sinal
+        output[i] *= amplitude;
     }
 }
 
 int main() {
-    float input[SIZE];
-    float output[SIZE];
-    float level = 0.5;
-    int i;
+    float input[BUFFER_SIZE];
+    float output[BUFFER_SIZE];
 
-    // Preencher o vetor de entrada com valores de uma simulação de um sinal com frequência fixa
-    float freq = 440.0; // frequência em Hz
-    float phase = 0.0; // fase inicial em radianos
-    float delta = (2 * 3.14159265358979323846 * freq) / 20000; // incremento de fase em cada amostra
-    for (i = 0; i < SIZE; i++) {
-        input[i] = sin(phase);
-        phase += delta;
+    // Gerando vetor de entrada
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        float time = (float)i / SAMPLE_RATE;
+        input[i] = sin(2.0 * 3.1415 * 440.0 * time);
     }
 
-    // Aplicar a distorção ao sinal de entrada e armazenar no vetor de saída
-    for (i = 0; i < SIZE; i++) {
-        output[i] = distortion(input[i], level);
-    }
+    // Aplicando distorção
+    apply_distortion(input, output);
 
-    // Verificar se o algoritmo está funcionando corretamente
-    int errors = compare(input, output, SIZE, TOLERANCE);
-    if (errors > 0) {
-        printf("O algoritmo apresentou %d erro(s).\n", errors);
-    } else {
-        printf("O algoritmo está funcionando corretamente.\n");
-    }
-
-    // Salvar o vetor de entrada e saída em arquivos
-    saveOutputToFile(input, SIZE, "input.txt");
-    saveOutputToFile(output, SIZE, "output.txt");
-
-    // Plotar o gráfico com o Gnuplot
-    plotGraph();
+    // Gerando gráfico e tabela
+    generate_plot(input, output);
+    generate_table(input, output);
 
     return 0;
 }
